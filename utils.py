@@ -1,88 +1,72 @@
 import pandas as pd
 import math
 
-# Normalize and clean data
 def load_clean_excel(path):
-    df = pd.read_excel(path, skiprows=0)
+    df = pd.read_excel(path, skiprows=1)
     df.columns = df.columns.str.strip()
-    df = df[df["Products"].notna()]
-    if "Unit" in df.columns:
-        df["Unit"] = df["Unit"].astype(str).str.upper().str.strip()
-    return df
+    df = df[df.columns[df.columns.str.contains("Products", case=False)][0]].notna()
+    df = pd.read_excel(path, skiprows=1)
+    df.columns = df.columns.str.strip()
+    return df[df["Products"].notna()]
 
 def load_paver_data():
     return load_clean_excel("Shaw Price 2025 Pavers slabs.xlsx")
 
-# Material cost with margin override
-def calculate_material_cost(product_name, sqft, product_data, margin_override=None):
-    try:
-        row = product_data[product_data["Products"] == product_name].iloc[0]
-        unit = row["Unit"]
-        price = float(row["Net"])
-        margin = float(margin_override) if margin_override is not None else float(row["Margin"])
-        coverage = float(row["Coverage"]) if "Coverage" in row and not pd.isna(row["Coverage"]) else 1
-        final_price = price * (1 + margin)
+def load_wall_data():
+    return load_clean_excel("Shaw Price 2025 Walls.xlsx")
 
-        if unit == "SFT":
-            return round(final_price * sqft / coverage, 2)
-        elif unit == "EA":
-            return round(final_price * (sqft / coverage), 2)
-        elif unit == "KIT":
-            return round(final_price, 2)
-        elif unit == "TON":
-            return round(final_price * (sqft / coverage), 2)
-        else:
-            return round(final_price, 2)
-    except:
-        return 0.0
+def load_steps_data():
+    return load_clean_excel("Shaw Price 2025 Steps.xlsx")
 
-# Gravel
+def load_firepit_data():
+    return load_clean_excel("Shaw Price 2025 Fire pits.xlsx")
+
+def load_garden_wall_data():
+    return load_clean_excel("Shaw Price 2025 Garden Walls.xlsx")
+
+def load_extras_data():
+    return load_clean_excel("Shaw Price 2025 Extras.xlsx")
+
+def calculate_material_cost(product_name, sqft, df, override_margin=None):
+    row = df[df["Products"] == product_name].iloc[0]
+    price = row["Net"]
+    margin = override_margin / 100 if override_margin is not None else row["Margin"]
+    total_price = price * (1 + margin)
+    coverage = row["Coverage"]
+    return round((sqft / coverage) * total_price, 2)
+
 def calculate_gravel_cost(sqft, depth_inches):
     gravel_depth_ft = depth_inches / 12
-    gravel_volume_yd3 = (sqft * 1.25 * gravel_depth_ft) / 27
-    loads = math.ceil(gravel_volume_yd3 / 3)
-    cost = loads * 250
-    return round(cost, 2), round(gravel_volume_yd3, 2), loads
+    volume_yd3 = (sqft * 1.25 * gravel_depth_ft) / 27
+    loads = math.ceil(volume_yd3 / 3)
+    return round(loads * 250, 2), round(volume_yd3, 2), loads
 
-# Fabric
 def calculate_fabric_cost(sqft):
-    return round(sqft * 0.50, 2)
+    return round(sqft * 0.5, 2)
 
-# Sand
-def calculate_polymeric_sand(sqft, material_type):
-    if "FLAGSTONE" in material_type.upper():
-        coverage = 50 if "RANDOM" in material_type.upper() else 120
+def calculate_polymeric_sand(sqft, product_name):
+    if "Flagstone" in product_name:
+        coverage = 50 if "Random" in product_name else 120
     else:
         coverage = 80
     bags = math.ceil(sqft / coverage)
-    return bags, bags * 50
+    return bags, round(bags * 50, 2)
 
-# Labor
 def calculate_labor_cost(laborers):
+    return sum(round(l["hours"]) * l["rate"] for l in laborers)
+
+def calculate_equipment_cost(equipment_hours):
     total = 0
-    for laborer in laborers:
-        total += laborer['rate'] * laborer['hours']
-    return round(total, 2)
+    for equip, hours in equipment_hours.items():
+        total += round(hours) * 130
+    return total
 
-# Equipment
-def calculate_equipment_cost(excavator_hrs, skid_steer_hrs, dump_truck_hrs):
-    hourly_cost = (excavator_hrs + skid_steer_hrs + dump_truck_hrs) * 130 * 1.15
-    return round(hourly_cost, 2)
+def calculate_travel_cost(trailer_km, passenger_km, passenger_vehicles):
+    base = 250 if trailer_km <= 30 else 250 + (trailer_km - 30) * 4.2
+    trailer_total = round(base * 1.15, 2)
+    passenger_total = round(passenger_km * 2 * 0.80 * passenger_vehicles, 2)
+    return trailer_total + passenger_total
 
-# Trailer transport logic
-def calculate_trailer_cost(km):
-    base_cost = 250 * 1.15
-    if km <= 30:
-        return round(base_cost, 2)
-    else:
-        extra_km = km - 30
-        return round(base_cost + (extra_km * 4.20), 2)
-
-# Passenger vehicle travel
-def calculate_passenger_vehicle_cost(km, vehicles):
-    return round(km * 2 * vehicles * 0.80, 2)
-
-# Totals
 def calculate_total(*costs):
     subtotal = sum(costs)
     hst = subtotal * 0.15
