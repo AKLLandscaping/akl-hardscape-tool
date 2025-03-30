@@ -5,8 +5,8 @@ import math
 def load_clean_excel(path):
     df = pd.read_excel(path, skiprows=1)
     df.columns = df.columns.str.strip()
-    df = df[df.columns[df.columns.str.contains("Products", case=False)][0]].notna()
-    return pd.read_excel(path, skiprows=1)
+    df = df[df["Products"].notna()]
+    return df
 
 def load_paver_data():
     return load_clean_excel("Shaw Price 2025 Pavers slabs.xlsx")
