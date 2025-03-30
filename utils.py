@@ -7,6 +7,7 @@ def load_paver_data():
     df.columns = df.columns.str.strip()  # remove extra spaces in headers
     df = df[df[df.columns[1]].notna()]   # filter out blank rows
 
+    # Safety check for required columns
     if "Unit" not in df.columns or "TOTAL" not in df.columns:
         raise KeyError("Excel sheet is missing required columns: 'Unit' or 'TOTAL'")
 
@@ -30,7 +31,7 @@ def load_extras_data():
 # Calculate material cost
 def calculate_material_cost(product_name, sqft, product_data):
     try:
-        product_data.columns = product_data.columns.str.strip()
+        product_data.columns = product_data.columns.str.strip()  # clean up headers just in case
         row = product_data[product_data.iloc[:, 1] == product_name].iloc[0]
         price = row["TOTAL"]
         coverage = row["Pallet Qty"]
@@ -42,7 +43,8 @@ def calculate_material_cost(product_name, sqft, product_data):
             material_cost = price
 
         return round(material_cost, 2)
-    except:
+    except Exception as e:
+        print(f"Error calculating material cost: {e}")
         return 0.0
 
 # Gravel
