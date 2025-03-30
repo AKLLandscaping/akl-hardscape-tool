@@ -1,12 +1,10 @@
-
 import pandas as pd
 import math
 
 # Load and clean Excel files
 def load_clean_excel(path):
     df = pd.read_excel(path, skiprows=1)
-    df.columns = df.columns.str.strip()  # Strip whitespace
-    print("COLUMNS:", df.columns.tolist())  # Debug: optional
+    df.columns = df.columns.str.strip()  # Strip whitespace from headers
     product_col = next(col for col in df.columns if col.strip().lower() == "products")
     df = df[df[product_col].notna()]
     return df
@@ -39,7 +37,7 @@ def calculate_material_cost(product_name, sqft, df, margin_override=None):
     pallet_qty = float(row["Pallet Qty"])
     coverage = float(row["Coverage"])
 
-    unit = str(row["Unit"]).strip().upper()
+    unit = str(row.get("Unit", "SFT")).strip().upper()
 
     if unit == "SFT":
         units = sqft / coverage
@@ -48,7 +46,7 @@ def calculate_material_cost(product_name, sqft, df, margin_override=None):
     elif unit == "KIT":
         units = 1
     elif unit == "TON":
-        units = sqft / 80  # natural stone average coverage per ton
+        units = sqft / 80  # Default ton coverage
     else:
         raise ValueError(f"Unknown unit type: {unit}")
 
