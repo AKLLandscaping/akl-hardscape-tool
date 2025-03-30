@@ -1,17 +1,13 @@
 import pandas as pd
 import math
 
-# Load and clean any Excel sheet
+# Load and clean Excel files
 def load_clean_excel(path):
     df = pd.read_excel(path, skiprows=1)
     df.columns = df.columns.str.strip()
     df = df[df.columns[df.columns.str.contains("Products", case=False)][0]].notna()
-    df = pd.read_excel(path, skiprows=1)
-    df.columns = df.columns.str.strip()
-    df = df[df[df.columns[1]].notna()]  # Drop empty rows
-    return df
+    return pd.read_excel(path, skiprows=1)
 
-# Specific loaders
 def load_paver_data():
     return load_clean_excel("Shaw Price 2025 Pavers slabs.xlsx")
 
@@ -31,79 +27,74 @@ def load_extras_data():
     return load_clean_excel("Shaw Price 2025 Extras.xlsx")
 
 # Material cost
-def calculate_material_cost(product_name, sqft, df, override_margin=None):
+def calculate_material_cost(product_name, sqft, df, margin_override=None):
     df.columns = df.columns.str.strip()
     row = df[df["Products"] == product_name].iloc[0]
-    unit = str(row["Unit"]).strip().upper()
-    price = float(row["Contractor"])
-    margin = override_margin / 100 if override_margin is not None else float(row["Margin"])
+
+    price = float(row["Net"])
+    margin = float(margin_override) / 100 if margin_override is not None else float(row["Margin"])
+    pallet_qty = float(row["Pallet Qty"])
     coverage = float(row["Coverage"])
 
+    unit = str(row["Unit"]).strip().upper()
+
     if unit == "SFT":
-        cost = (price * (1 + margin)) * (sqft / coverage)
+        units = sqft / coverage
     elif unit == "EA":
-        pallets = math.ceil(sqft / coverage)
-        cost = pallets * (price * coverage) * (1 + margin)
+        units = math.ceil(sqft / coverage)
     elif unit == "KIT":
-        cost = price * (1 + margin)
+        units = 1
     elif unit == "TON":
-        # Ton is 80 sqft/pallet
-        cost = (price * (1 + margin)) * (sqft / 80)
+        units = sqft / 80
     else:
-        cost = 0
+        units = 1
 
-    return round(cost, 2)
+    total = units * price * (1 + margin)
+    return round(total, 2)
 
-# Gravel
+# Gravel cost
 def calculate_gravel_cost(sqft, depth_inches):
     gravel_depth_ft = depth_inches / 12
-    gravel_volume_yd3 = (sqft * 1.25 * gravel_depth_ft) / 27
-    loads = math.ceil(gravel_volume_yd3 / 3)
-    cost = loads * 250
-    return round(cost, 2), round(gravel_volume_yd3, 2), loads
+    volume_yd3 = (sqft * 1.25 * gravel_depth_ft) / 27
+    loads = math.ceil(volume_yd3 / 3)
+    return round(loads * 250, 2)
 
 # Fabric
 def calculate_fabric_cost(sqft):
     return round(sqft * 0.50, 2)
 
-# Sand
-def calculate_polymeric_sand(sqft, material_type):
+# Polymeric sand
+def calculate_polymeric_sand(sqft, material_type="Paver"):
     if "Flagstone" in material_type:
         coverage = 50 if "Random" in material_type else 120
     else:
         coverage = 80
     bags = math.ceil(sqft / coverage)
-    return bags, bags * 50
+    return bags, round(bags * 50, 2)
 
-# Labor
+# Labor cost
 def calculate_labor_cost(laborers):
     total = 0
-    for name, rate, hours in laborers:
-        total += float(rate) * float(hours)
+    for person in laborers:
+        total += int(person['hours']) * float(person['rate'])
     return round(total, 2)
 
-# Equipment (all $130/hr + tax)
+# Equipment cost
 def calculate_equipment_cost(equipment_hours):
     total = 0
-    for machine, hours in equipment_hours.items():
-        total += hours * 130
-    return round(total * 1.15, 2)
+    for eq, hours in equipment_hours.items():
+        total += round(hours * 130, 2)
+    return round(total, 2)
 
-# Trailer Transport
-def calculate_trailer_transport_cost(km):
-    base_km = 30
-    if km <= base_km:
-        return round(250 * 1.15, 2)
-    else:
-        extra_km = km - base_km
-        return round((250 + extra_km * 4.2) * 1.15, 2)
+# Travel cost
+def calculate_travel_cost(trailer_km, passenger_km, num_vehicles):
+    trailer_cost = 250 if trailer_km <= 30 else (250 + (trailer_km - 30) * 4.20)
+    passenger_cost = passenger_km * num_vehicles * 0.80
+    return round(trailer_cost + passenger_cost, 2)
 
-# Passenger Vehicle
-def calculate_passenger_vehicle_cost(km, num_vehicles):
-    return round(km * num_vehicles * 0.80, 2)
-
-# Totals
-def calculate_total(*costs):
-    subtotal = sum(costs)
-    hst = subtotal * 0.15
-    return round(subtotal, 2), round(hst, 2), round(subtotal + hst, 2)
+# Total + tax
+def calculate_total(*args):
+    subtotal = sum(args)
+    tax = subtotal * 0.15
+    total = subtotal + tax
+    return round(subtotal, 2), round(tax, 2), round(total, 2)
