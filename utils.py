@@ -1,11 +1,11 @@
 import pandas as pd
 import math
 
-# Load and clean Excel files
+# Load and clean Excel files with guaranteed column match
 def load_clean_excel(path):
     df = pd.read_excel(path, skiprows=1)
-    df.columns = df.columns.str.strip()
-    df = df[df["Products"].notna()]
+    df.columns = df.columns.str.strip().str.lower()  # normalize for case and space issues
+    df = df[df["products"].notna()]  # 'products' is now lowercase
     return df
 
 def load_paver_data():
@@ -13,27 +13,27 @@ def load_paver_data():
 
 # Calculate material cost
 def calculate_material_cost(product_name, sqft, product_data, margin_override=30):
-    product_data.columns = product_data.columns.str.strip()
-    match = product_data[product_data["Products"] == product_name]
+    product_data.columns = product_data.columns.str.strip().str.lower()
+    match = product_data[product_data["products"] == product_name]
 
     if match.empty:
         return {"material_total": 0, "unit_price": 0, "units_required": 0}
 
     row = match.iloc[0]
-    price = float(row["Contractor"])
-    unit = str(row["Unit"]).lower().strip()
+    price = float(row["contractor"])
+    unit = str(row.get("unit", "sft")).lower().strip()  # fallback to 'sft' if missing
     margin = margin_override / 100
     unit_price = price * (1 + margin)
 
     # Default coverage per pallet based on unit type
     if unit == "sft":
-        coverage = float(row["Pallet Qty"])
+        coverage = float(row["pallet qty"])
     elif unit == "ea":
         coverage = 1
     elif unit == "kit":
         coverage = 1
     elif unit == "ton":
-        coverage = 80  # Default for natural stone
+        coverage = 80
     else:
         coverage = 1
 
