@@ -1,35 +1,30 @@
 import pandas as pd
+import math
 
-def load_clean_excel(filename):
-    df = pd.read_excel(filename)
+def load_clean_excel(file_path):
+    df = pd.read_excel(file_path)
     df.columns = [col.strip() for col in df.columns]
-    if "Products" not in df.columns:
-        raise KeyError("Missing 'Products' column in the Excel file.")
-    return df[df["Products"].notna()]
+    df = df[df["Products"].notna()]
+    return df
 
 def load_paver_data():
-    df = load_clean_excel("Shaw Price 2025 Pavers slabs.xlsx")
-    if "Unit" not in df.columns:
-        raise KeyError("Missing 'Unit' column in the paver Excel sheet.")
-    return df[df["Unit"].isin(["sft", "ea", "kit", "ton"])].dropna(subset=["TOTAL"])
+    return load_clean_excel("Shaw Price 2025 Pavers slabs.xlsx")
 
-def calculate_material_cost(product, sqft, df, margin_override=30):
-    row = df[df["Products"] == product].iloc[0]
-    unit_type = row["Unit"]
-    coverage = row["Coverage"]
-    net_price = row["Net"]
-    unit_price = net_price * (1 + margin_override / 100)
+def calculate_material_cost(product_name, sqft, df, margin_override=None):
+    product_row = df[df["Products"] == product_name].iloc[0]
 
-    if unit_type == "sft":
-        units_required = sqft / coverage
-    else:
-        units_required = 1  # For kit, ea, ton: 1 unit flat
+    unit_price = product_row["Total"]
+    coverage = product_row["Coverage"]
+    margin = product_row["Margin"]
 
+    if margin_override is not None:
+        unit_price = round(product_row["Net"] * (1 + margin_override / 100), 2)
+
+    units_required = math.ceil(sqft / coverage) if coverage > 0 else 1
     material_total = round(units_required * unit_price, 2)
 
     return {
-        "unit_type": unit_type,
         "unit_price": round(unit_price, 2),
-        "units_required": round(units_required, 2),
+        "units_required": units_required,
         "material_total": material_total
     }
