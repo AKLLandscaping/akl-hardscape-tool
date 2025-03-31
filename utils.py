@@ -1,51 +1,35 @@
 import pandas as pd
-import math
 
-# Load and clean Excel files with guaranteed column match
-def load_clean_excel(path):
-    df = pd.read_excel(path, skiprows=1)
-    df.columns = df.columns.str.strip().str.lower()  # normalize for case and space issues
-    df = df[df["products"].notna()]  # 'products' is now lowercase
-    return df
+def load_clean_excel(filename):
+    df = pd.read_excel(filename)
+    df.columns = [col.strip() for col in df.columns]
+    if "Products" not in df.columns:
+        raise KeyError("Missing 'Products' column in the Excel file.")
+    return df[df["Products"].notna()]
 
 def load_paver_data():
-    return load_clean_excel("Shaw Price 2025 Pavers slabs.xlsx")
+    df = load_clean_excel("Shaw Price 2025 Pavers slabs.xlsx")
+    if "Unit" not in df.columns:
+        raise KeyError("Missing 'Unit' column in the paver Excel sheet.")
+    return df[df["Unit"].isin(["sft", "ea", "kit", "ton"])].dropna(subset=["TOTAL"])
 
-# Calculate material cost
-def calculate_material_cost(product_name, sqft, product_data, margin_override=30):
-    product_data.columns = product_data.columns.str.strip().str.lower()
-    match = product_data[product_data["products"] == product_name]
+def calculate_material_cost(product, sqft, df, margin_override=30):
+    row = df[df["Products"] == product].iloc[0]
+    unit_type = row["Unit"]
+    coverage = row["Coverage"]
+    net_price = row["Net"]
+    unit_price = net_price * (1 + margin_override / 100)
 
-    if match.empty:
-        return {"material_total": 0, "unit_price": 0, "units_required": 0}
-
-    row = match.iloc[0]
-    price = float(row["contractor"])
-    unit = str(row.get("unit", "sft")).lower().strip()  # fallback to 'sft' if missing
-    margin = margin_override / 100
-    unit_price = price * (1 + margin)
-
-    # Default coverage per pallet based on unit type
-    if unit == "sft":
-        coverage = float(row["pallet qty"])
-    elif unit == "ea":
-        coverage = 1
-    elif unit == "kit":
-        coverage = 1
-    elif unit == "ton":
-        coverage = 80
+    if unit_type == "sft":
+        units_required = sqft / coverage
     else:
-        coverage = 1
-
-    if unit in ["sft", "ton"]:
-        units_required = math.ceil(sqft / coverage)
-    else:
-        units_required = 1
+        units_required = 1  # For kit, ea, ton: 1 unit flat
 
     material_total = round(units_required * unit_price, 2)
 
     return {
-        "material_total": material_total,
+        "unit_type": unit_type,
         "unit_price": round(unit_price, 2),
-        "units_required": units_required
+        "units_required": round(units_required, 2),
+        "material_total": material_total
     }
