@@ -7,141 +7,136 @@ EDGE_RESTRAINT_COST = 220
 INLAY_COST_FULL = 4000
 INLAY_COST_SIMPLE = 2850
 GRAVEL_COST_PER_LOAD = 250
-SAND_COST_PER_BAG = 50
-SAND_COST_PREMIUM = 75
+SAND_COST_PER_BAG = 50  # Will be updated by dropdown
 EQUIPMENT_HOURLY_RATE = 130
-TRAILER_BASE_COST = 250
-TRAILER_KM_THRESHOLD = 30
-TRAILER_KM_RATE = 4.20
-PASSENGER_KM_RATE = 0.80
+TRAVEL_COST_PER_KM = 4.20
+PASSENGER_TRAVEL_COST_PER_KM = 0.80
 TAX_RATE = 0.15
-MEAL_COST_PER_LABORER = 50  # per night
+FOOD_COST_PER_LABORER = 50
 
-st.set_page_config(page_title="AKL Walkway Estimator", layout="wide")
-st.title("🧱 AKL Hardscape Master Tool – Walkway Estimator")
+st.set_page_config(page_title="AKL Hardscape Master Tool – Walkway Estimator", layout="wide")
+st.markdown("## 🧱 AKL Hardscape Master Tool – Walkway Estimator")
 
-# Load Data
-paver_data = load_paver_data()
+try:
+    df = load_paver_data()
 
-# --- Inputs ---
-st.header("📐 Project Details")
-sqft = st.number_input("Square Feet of Walkway", min_value=0, step=1)
-margin = st.slider("Contractor Margin %", 0, 100, 30)
+    # 📐 Inputs
+    sqft = st.number_input("📏 Square Feet", min_value=0, value=100, step=1)
+    margin = st.slider("📊 Override Margin %", 0, 100, 30)
 
-# Product dropdown with unit in display
-paver_options = paver_data.apply(
-    lambda row: f"{row['Products']} — ({str(row['Unit']).strip().lower()})", axis=1
-)
-selected_display = st.selectbox("🧱 Choose Product", paver_options)
-selected_product = selected_display.split(" — ")[0]
+    # 🧱 Material
+    products = df["Products"].dropna().unique()
+    product = st.selectbox("Choose Product", products)
+    selected_row = df[df["Products"] == product].iloc[0]
+    unit_type = selected_row["Unit"]
+    coverage = selected_row["Coverage"]
+    net_price = selected_row["Net"]
+    unit_price = net_price * (1 + margin / 100)
+    units_required = math.ceil(sqft / coverage) if unit_type == "sft" else 1
+    material_total = round(units_required * unit_price, 2)
 
-# Labor
-st.header("👷 Labor")
-num_laborers = st.selectbox("Number of Laborers", list(range(1, 11)))
-labor_total = 0
-for i in range(num_laborers):
-    hours = st.selectbox(f"Hours for Laborer #{i+1}", list(range(1, 13)), key=f"hours_{i}")
-    rate = st.selectbox(f"Hourly Rate for Laborer #{i+1}", [35, 40, 45, 50, 55, 60, 65], key=f"rate_{i}")
-    labor_total += hours * rate
+    # 🦺 Labor
+    st.subheader("👷 Labor")
+    num_laborers = st.selectbox("Number of Laborers", list(range(1, 11)), index=1)
+    labor_total = 0
+    for i in range(num_laborers):
+        hours = st.selectbox(f"Hours for Laborer #{i+1}", list(range(1, 13)), key=f"hours_{i}")
+        rate = st.selectbox(f"Hourly Rate for Laborer #{i+1}", [35, 40, 45, 50, 55, 60, 65], key=f"rate_{i}")
+        labor_total += hours * rate
 
-# Equipment
-st.header("🚜 Equipment Usage")
-excavator_hours = st.selectbox("Excavator Hours", list(range(0, 13)))
-skid_steer_hours = st.selectbox("Skid Steer Hours", list(range(0, 13)))
-dump_truck_hours = st.selectbox("Dump Truck Hours", list(range(0, 13)))
-equipment_total = (excavator_hours + skid_steer_hours + dump_truck_hours) * EQUIPMENT_HOURLY_RATE
-equipment_total_with_tax = round(equipment_total * (1 + TAX_RATE))
+    # 🚜 Equipment
+    st.subheader("🚜 Equipment Use")
+    excavator_hours = st.selectbox("Excavator Hours", list(range(0, 13)))
+    skid_steer_hours = st.selectbox("Skid Steer Hours", list(range(0, 13)))
+    dump_truck_hours = st.selectbox("Dump Truck Hours", list(range(0, 13)))
 
-# Travel
-st.header("🚚 Travel")
-excavator_km = st.number_input("Excavator Trailer KM", min_value=0, step=1)
-skid_km = st.number_input("Skid Steer Trailer KM", min_value=0, step=1)
-truck_km = st.number_input("Dump Truck Trailer KM", min_value=0, step=1)
-passenger_km = st.number_input("Passenger Vehicle KM", min_value=0, step=1)
-passenger_vehicles = st.selectbox("Number of Passenger Vehicles", list(range(1, 11)))
+    excavator_km = st.number_input("Excavator Trailer Km", min_value=0, value=30, step=1)
+    skid_km = st.number_input("Skid Steer Trailer Km", min_value=0, value=30, step=1)
+    truck_km = st.number_input("Dump Truck Trailer Km", min_value=0, value=30, step=1)
 
-def trailer_cost(km):
-    return TRAILER_BASE_COST if km <= TRAILER_KM_THRESHOLD else TRAILER_BASE_COST + (km - TRAILER_KM_THRESHOLD) * TRAILER_KM_RATE
+    equipment_cost = (excavator_hours + skid_steer_hours + dump_truck_hours) * EQUIPMENT_HOURLY_RATE
+    trailer_cost = sum(
+        250 if km <= 30 else 250 + (km - 30) * TRAVEL_COST_PER_KM
+        for km in [excavator_km, skid_km, truck_km]
+    )
 
-trailer_total = sum([trailer_cost(km) for km in [excavator_km, skid_km, truck_km]])
-passenger_total = passenger_km * passenger_vehicles * PASSENGER_KM_RATE
+    # 🚗 Travel
+    st.subheader("🚗 Travel")
+    round_trip_km = st.number_input("Round Trip Distance (km)", min_value=0, value=30, step=1)
+    passenger_vehicles = st.selectbox("Number of Passenger Vehicles", list(range(1, 11)))
+    passenger_travel_cost = round_trip_km * PASSENGER_TRAVEL_COST_PER_KM * passenger_vehicles
 
-# Gravel
-st.header("🪨 Gravel Base")
-gravel_depth_inches = 6
-gravel_depth_ft = gravel_depth_inches / 12
-gravel_volume_yd3 = (sqft * 1.25 * gravel_depth_ft) / 27
-gravel_loads = math.ceil(gravel_volume_yd3 / 3)
-gravel_base_cost = gravel_loads * GRAVEL_COST_PER_LOAD
+    # ➕ Add-Ons
+    st.subheader("➕ Add-Ons")
+    inlay_full = st.checkbox("Include 4 ft wide inlay ($4000 + HST)")
+    inlay_simple = st.checkbox("Inlay w/ no background or border ($2850 + HST)")
+    inlay_total = 0
+    if inlay_full:
+        inlay_total += round(INLAY_COST_FULL * (1 + TAX_RATE), 2)
+    if inlay_simple:
+        inlay_total += round(INLAY_COST_SIMPLE * (1 + TAX_RATE), 2)
 
-extra_gravel_loads = st.selectbox("Add Extra Gravel Loads", list(range(0, 6)))
-extra_gravel_price = st.number_input("Price per Extra Load ($)", value=250)
-extra_gravel_km = st.number_input("Extra Gravel Delivery KM", value=30)
-extra_gravel_cost = (extra_gravel_loads * extra_gravel_price) + max(0, (extra_gravel_km - 30)) * 4.20
+    sand_type = st.selectbox("Polymeric Sand Type", ["None", "$50+tax per bag", "$75+tax per bag"])
+    sand_price = 50 if "50" in sand_type else 75 if "75" in sand_type else 0
+    sand_bags = 0
+    if sand_price:
+        sand_bags = math.ceil(sqft / 80)
+    sand_total = sand_bags * sand_price * (1 + TAX_RATE)
 
-# Edge Restraint
-st.header("🧱 Concrete Edge Restraint")
-edge_units = math.ceil(sqft / 100)
-edge_cost = edge_units * EDGE_RESTRAINT_COST
-edge_cost_with_tax = round(edge_cost * (1 + TAX_RATE))
+    extra_gravel_loads = st.selectbox("Extra Gravel Loads", list(range(0, 6)), index=0)
+    extra_gravel_price = st.number_input("Extra Gravel Price per Load ($)", value=250, step=1)
+    extra_gravel_km = st.number_input("Delivery Distance (km)", value=30, step=1)
+    extra_km_charge = max(0, extra_gravel_km - 30) * TRAVEL_COST_PER_KM
+    extra_gravel_total = extra_gravel_loads * extra_gravel_price + extra_km_charge
 
-# Inlay Options
-st.header("🎨 Inlay Options")
-inlay_full = st.checkbox("Add Full Inlay ($4000 + HST)")
-inlay_simple = st.checkbox("Add Simple Inlay - No Background or Border ($2850 + HST)")
-inlay_cost = 0
-if inlay_full:
-    inlay_cost += INLAY_COST_FULL * (1 + TAX_RATE)
-if inlay_simple:
-    inlay_cost += INLAY_COST_SIMPLE * (1 + TAX_RATE)
+    # 🛏️ Overnight Stay
+    st.subheader("🛏️ Overnight Stay")
+    overnight_room_cost = st.number_input("Room Cost ($)", min_value=0, step=1)
+    overnight_laborers = st.selectbox("Number of Laborers Staying Overnight", list(range(0, 11)), index=0)
+    overnight_food_total = overnight_laborers * FOOD_COST_PER_LABORER * (1 + TAX_RATE)
+    overnight_total = overnight_room_cost + overnight_food_total
 
-# Polymeric Sand
-st.header("🌾 Polymeric Sand")
-sand_type = st.selectbox("Sand Type", ["None", "$50+tax per bag", "$75+tax per bag"])
-sand_cost = 0
-bags_needed = math.ceil(sqft / 80) if sand_type != "None" else 0
-if sand_type == "$50+tax per bag":
-    sand_cost = round(bags_needed * 50 * (1 + TAX_RATE))
-elif sand_type == "$75+tax per bag":
-    sand_cost = round(bags_needed * 75 * (1 + TAX_RATE))
+    # 🪨 Gravel Base
+    gravel_yards = math.ceil(sqft * 0.5 / 27)
+    gravel_base_total = gravel_yards * GRAVEL_COST_PER_LOAD
 
-# Overnight Stay
-st.header("🏨 Overnight Stay")
-room_cost = st.number_input("Room Cost ($)", value=0)
-overnight_laborers = st.selectbox("Laborers Staying Overnight", list(range(0, 11)))
-overnight_food_total = overnight_laborers * MEAL_COST_PER_LABORER * (1 + TAX_RATE)
-overnight_total = round(room_cost + overnight_food_total)
+    # 📋 Estimate Summary
+    st.subheader("📋 Estimate Summary")
+    st.write(f"**Product:** {product} ({unit_type})")
+    st.write(f"**Price per Unit (with margin):** ${round(unit_price, 2)}")
+    st.write(f"**Units Required:** {units_required}")
+    st.write(f"**Material Total:** ${material_total}")
+    st.markdown("---")
+    st.write(f"**Gravel Yards:** {gravel_yards} @ $250/yd = ${gravel_base_total}")
+    st.write(f"**Edge Restraint:** {math.ceil(sqft / 100)} x $220 = ${math.ceil(sqft / 100) * EDGE_RESTRAINT_COST * (1 + TAX_RATE):.2f}")
+    st.write(f"**Labor Total:** ${labor_total:.2f}")
+    st.write(f"**Equipment Cost:** ${equipment_cost:.2f}")
+    st.write(f"**Trailer Transport:** ${trailer_cost:.2f}")
+    st.write(f"**Passenger Vehicle Travel:** ${passenger_travel_cost:.2f}")
+    if extra_gravel_loads > 0:
+        st.write(f"**Extra Gravel Loads:** ${extra_gravel_total:.2f}")
+    if sand_bags > 0:
+        st.write(f"**Polymeric Sand:** {sand_bags} bags = ${sand_total:.2f}")
+    if inlay_total > 0:
+        st.write(f"**Inlay Add-On:** ${inlay_total:.2f}")
+    if overnight_total > 0:
+        st.write(f"**Overnight Stay Total:** ${overnight_total:.2f}")
 
-# Material
-material = calculate_material_cost(selected_product, sqft, paver_data, margin_override=margin)
+    # 🧾 Totals
+    subtotal = (
+        material_total + gravel_base_total +
+        (math.ceil(sqft / 100) * EDGE_RESTRAINT_COST * (1 + TAX_RATE)) +
+        labor_total + equipment_cost + trailer_cost +
+        passenger_travel_cost + extra_gravel_total + sand_total +
+        inlay_total + overnight_total
+    )
+    hst = round(subtotal * TAX_RATE, 2)
+    final = round(subtotal + hst, 2)
 
-# Totals
-subtotal = (
-    material["material_total"] + edge_cost_with_tax + gravel_base_cost +
-    labor_total + equipment_total_with_tax + trailer_total +
-    passenger_total + extra_gravel_cost + sand_cost + inlay_cost + overnight_total
-)
-hst = round(subtotal * TAX_RATE)
-grand_total = round(subtotal + hst)
+    st.markdown("---")
+    st.write(f"**Subtotal:** ${round(subtotal, 2)}")
+    st.write(f"**HST (15%):** ${hst}")
+    st.markdown(f"### 💰 Final Total: ${final}")
 
-# --- Output ---
-st.markdown("## 📋 Estimate Summary")
-st.write(f"**Material ({selected_product})**: ${material['material_total']}")
-st.write(f"**Edge Restraint:** ${edge_cost_with_tax}")
-st.write(f"**Gravel (Base):** ${gravel_base_cost}")
-st.write(f"**Extra Gravel Loads:** ${extra_gravel_cost}")
-st.write(f"**Labor:** ${labor_total}")
-st.write(f"**Equipment:** ${equipment_total_with_tax}")
-st.write(f"**Trailer Transport:** ${trailer_total}")
-st.write(f"**Passenger Travel:** ${passenger_total}")
-if sand_cost:
-    st.write(f"**Polymeric Sand ({bags_needed} bags):** ${sand_cost}")
-if inlay_cost:
-    st.write(f"**Inlay:** ${inlay_cost}")
-if overnight_total:
-    st.write(f"**Overnight Stay Total:** ${overnight_total}")
-
-st.markdown("---")
-st.write(f"**Subtotal:** ${subtotal}")
-st.write(f"**HST (15%):** ${hst}")
-st.markdown(f"### 💰 Final Total: ${grand_total}")
+except Exception as e:
+    st.error(f"Something went wrong: {e}")
