@@ -2,31 +2,23 @@ import pandas as pd
 import math
 
 def load_paver_data():
-    df = pd.read_excel("Shaw Price 2025 Pavers slabs.xlsx")
-    df.columns = df.columns.str.strip()
-    df = df[df.columns[df.columns.str.lower().str.strip() == "products"][0]].notna()
-    return pd.read_excel("Shaw Price 2025 Pavers slabs.xlsx", skiprows=0)
+    return load_clean_excel("Shaw Price 2025 Pavers slabs.xlsx")
 
-def calculate_material_cost(product_name, sqft, df, margin_override=None):
+def load_clean_excel(path):
+    df = pd.read_excel(path, skiprows=1)
     df.columns = df.columns.str.strip()
+    return df[df[df.columns[0]].notna()]
+
+def calculate_material_cost(product_name, sqft, df, margin_override=30):
     row = df[df["Products"] == product_name].iloc[0]
-
-    price = float(row["Net"])
-    margin = float(margin_override) / 100 if margin_override is not None else float(row["Margin"])
-    pallet_qty = float(row["Pallet Qty"]) if row["Pallet Qty"] != "x" else 1
-    coverage = float(row["Coverage"])
-    unit = "SFT"
-
-    if unit == "SFT":
-        units = math.ceil(sqft / coverage)
-    else:
-        units = 1
-
-    unit_price = round(price * (1 + margin), 2)
-    material_total = round(units * unit_price, 2)
-
+    unit_coverage = row["Coverage"]
+    contractor_price = row["Contractor"]
+    margin = margin_override / 100
+    unit_price = round(contractor_price * (1 + margin), 2)
+    units_required = math.ceil(sqft / unit_coverage)
+    material_total = round(unit_price * units_required, 2)
     return {
         "unit_price": unit_price,
-        "units_required": units,
+        "units_required": units_required,
         "material_total": material_total
     }
