@@ -1,21 +1,22 @@
 import pandas as pd
+import math
 
+# Load and clean any Shaw Brick sheet
+def load_clean_excel(path):
+    df = pd.read_excel(path, skiprows=1)
+    df.columns = df.columns.str.strip()
+    df = df[df["Products"].notna()]
+    return df
+
+# Load each section file
 def load_paver_data():
-    df = pd.read_excel("Shaw Price 2025 Pavers slabs.xlsx")
-    return df[df["Products"].notna()]
+    return load_clean_excel("Shaw Price 2025 Pavers slabs.xlsx")
 
-def calculate_material_cost(product_name, sqft, df, margin_override=30):
-    row = df[df["Products"] == product_name].iloc[0]
-    coverage = row["Coverage"]
-    pallet_qty = row["Pallet Qty"]
-    base_price = row["Net"]
-    
-    units_required = (sqft / coverage)
-    price_with_margin = base_price * (1 + (margin_override / 100))
-    material_total = round(price_with_margin * units_required, 2)
+def load_wall_data():
+    return load_clean_excel("Shaw Price 2025 Walls.xlsx")
 
-    return {
-        "unit_price": round(price_with_margin, 2),
-        "units_required": round(units_required, 2),
-        "material_total": material_total
-    }
+def load_steps_data():
+    return load_clean_excel("Shaw Price 2025 Steps Stairs.xlsx")
+
+def load_firepit_data():
+    return load_clean_excel
